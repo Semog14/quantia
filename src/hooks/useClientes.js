@@ -23,13 +23,15 @@ export function useClientes() {
 
   const saveCliente = async (cliente) => {
     const empresaId = await getEmpresaId()
-    if (!empresaId) return null
+    if (!empresaId) throw new Error('Empresa não encontrada. Por favor, recarregue a página.')
     const payload = { ...cliente, empresa_id: empresaId }
     if (cliente.id) {
-      const { data } = await supabase.from('clientes').update(payload).eq('id', cliente.id).select().single()
+      const { data, error } = await supabase.from('clientes').update(payload).eq('id', cliente.id).select().single()
+      if (error) throw error
       return data
     } else {
-      const { data } = await supabase.from('clientes').insert(payload).select().single()
+      const { data, error } = await supabase.from('clientes').insert(payload).select().single()
+      if (error) throw error
       return data
     }
   }

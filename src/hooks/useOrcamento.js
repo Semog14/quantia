@@ -121,19 +121,17 @@ export function useOrcamentoEditor(id) {
   const saveOrcamento = async () => {
     if (!orcamento) return null
     setSaving(true)
-
-    const empresaId = await getEmpresaId()
-    if (!empresaId) {
-      alert('Erro: sessão expirada. Por favor, recarregue a página.')
-      setSaving(false)
-      return null
-    }
-
-    const subtotal = calcSubtotal(capitulos)
-    const { totalComIva } = calcTotais(subtotal, orcamento)
     let orcId = orcamento.id
 
     try {
+      const empresaId = await getEmpresaId()
+      if (!empresaId) {
+        alert('Erro: não foi possível identificar a empresa. Por favor, recarregue a página.')
+        return null
+      }
+
+      const subtotal = calcSubtotal(capitulos)
+      const { totalComIva } = calcTotais(subtotal, orcamento)
       const payload = {
         empresa_id: empresaId,
         descricao: orcamento.descricao || 'Sem descrição',

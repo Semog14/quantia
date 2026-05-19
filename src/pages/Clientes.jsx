@@ -39,10 +39,16 @@ export default function Clientes() {
   const handleSave = async () => {
     if (!validate()) return
     setSaving(true)
-    await saveCliente(form)
-    await refetch()
-    setSaving(false)
-    setModal(false)
+    try {
+      await saveCliente(form)
+      await refetch()
+      setModal(false)
+    } catch (e) {
+      console.error('Erro ao guardar cliente:', e)
+      alert(e?.message || 'Erro ao guardar. Verifique a ligação e tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDelete = async () => {
