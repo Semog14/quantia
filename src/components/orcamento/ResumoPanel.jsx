@@ -1,8 +1,8 @@
-import React from 'react'
+import React, { memo } from 'react'
 import { formatarMoeda } from '../../lib/validacoes'
 import { calcularTotaisOrcamento } from '../../lib/calculos'
 
-export default function ResumoPanel({ orcamento, capitulos, onChange }) {
+function ResumoPanel({ orcamento, capitulos, onChange }) {
   const totais = calcularTotaisOrcamento({
     capitulos,
     pctImprevistos: orcamento.pct_imprevistos,
@@ -91,6 +91,18 @@ export default function ResumoPanel({ orcamento, capitulos, onChange }) {
     </div>
   )
 }
+
+// Only re-render when financial fields or capitulos change
+export default memo(ResumoPanel, (prev, next) => {
+  return (
+    prev.capitulos === next.capitulos &&
+    prev.orcamento.pct_imprevistos === next.orcamento.pct_imprevistos &&
+    prev.orcamento.pct_margem === next.orcamento.pct_margem &&
+    prev.orcamento.tipo_iva === next.orcamento.tipo_iva &&
+    prev.orcamento.mostrar_margem === next.orcamento.mostrar_margem &&
+    prev.onChange === next.onChange
+  )
+})
 
 function TotalRow({ label, value, bordered, note }) {
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, ChevronUp, ChevronDown, GripVertical, Edit2, Check, X } from 'lucide-react'
 import ArtigoModal from './ArtigoModal'
 import { formatarMoeda } from '../../lib/validacoes'
@@ -6,7 +6,90 @@ import { calcularSubtotalCapitulo } from '../../lib/calculos'
 import { UNIDADES } from '../../data/artigosBD'
 import { ConfirmModal } from '../ui/Modal'
 
-// Callbacks receive (capId, ...) — capId is always capitulo.id
+// ─── Artigo Row ───────────────────────────────────────────────────────────────
+// Local state per row — only calls parent onBlur to avoid cascade re-renders
+const ArtigoRow = React.memo(function ArtigoRow({ art, ai, capId, onUpdate, onRemove }) {
+  const [descricao, setDescricao] = useState(art.descricao)
+  const [quantidade, setQuantidade] = useState(art.quantidade)
+  const [preco, setPreco] = useState(art.preco_unitario)
+  const [unidade, setUnidade] = useState(art.unidade)
+
+  // Sync when parent pushes a real id after save (local- → uuid)
+  useEffect(() => { setDescricao(art.descricao) }, [art.descricao])
+  useEffect(() => { setQuantidade(art.quantidade) }, [art.quantidade])
+  useEffect(() => { setPreco(art.preco_unitario) }, [art.preco_unitario])
+  useEffect(() => { setUnidade(art.unidade) }, [art.unidade])
+
+  const flush = useCallback(() => {
+    onUpdate(capId, art.id, {
+      descricao,
+      quantidade,
+      preco_unitario: preco,
+      unidade,
+    })
+  }, [capId, art.id, descricao, quantidade, preco, unidade, onUpdate])
+
+  const total = (parseFloat(quantidade) || 0) * (parseFloat(preco) || 0)
+
+  return (
+    <tr className="hover:bg-bg-secondary/30 group">
+      <td className="px-4 py-1.5 text-xs text-gray-400 font-mono">{String(ai + 1).padStart(2, '0')}</td>
+      <td className="px-4 py-1.5">
+        <input
+          type="text"
+          value={descricao}
+          onChange={e => setDescricao(e.target.value)}
+          onBlur={flush}
+          className="w-full bg-transparent border-0 text-sm text-gray-800 focus:outline-none focus:bg-white focus:border focus:border-border rounded px-1 py-0.5 min-w-[200px]"
+        />
+      </td>
+      <td className="px-2 py-1.5">
+        <select
+          value={unidade}
+          onChange={e => { setUnidade(e.target.value); onUpdate(capId, art.id, { unidade: e.target.value }) }}
+          className="w-full bg-transparent border-0 text-sm text-gray-600 text-center focus:outline-none focus:bg-white focus:border focus:border-border rounded px-1 py-0.5"
+        >
+          {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+      </td>
+      <td className="px-2 py-1.5">
+        <input
+          type="number"
+          min="0" step="0.01"
+          value={quantidade}
+          onChange={e => setQuantidade(e.target.value)}
+          onBlur={flush}
+          className="w-full bg-transparent border-0 text-sm text-right text-gray-800 focus:outline-none focus:bg-white focus:border focus:border-border rounded px-1 py-0.5"
+          inputMode="decimal"
+        />
+      </td>
+      <td className="px-2 py-1.5">
+        <input
+          type="number"
+          min="0" step="0.01"
+          value={preco}
+          onChange={e => setPreco(e.target.value)}
+          onBlur={flush}
+          className="w-full bg-transparent border-0 text-sm text-right text-gray-800 focus:outline-none focus:bg-white focus:border focus:border-border rounded px-1 py-0.5"
+          inputMode="decimal"
+        />
+      </td>
+      <td className="px-4 py-1.5 text-right text-sm font-medium text-gray-900">
+        {formatarMoeda(total)}
+      </td>
+      <td className="py-1.5 pr-2">
+        <button
+          onClick={() => onRemove(art.id)}
+          className="p-1.5 rounded text-gray-200 hover:text-danger hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+        >
+          <Trash2 size={13} />
+        </button>
+      </td>
+    </tr>
+  )
+})
+
+// ─── Capitulo Editor ──────────────────────────────────────────────────────────
 function CapituloEditor({ capitulo, index, total, onUpdate, onRemove, onMoveUp, onMoveDown, onAddArtigo, onUpdateArtigo, onRemoveArtigo }) {
   const [artigoModal, setArtigoModal] = useState(false)
   const [editNome, setEditNome] = useState(false)
@@ -19,6 +102,10 @@ function CapituloEditor({ capitulo, index, total, onUpdate, onRemove, onMoveUp, 
     if (nomeTemp.trim()) onUpdate(capId, { nome: nomeTemp.trim() })
     setEditNome(false)
   }
+
+  const handleRemoveArtigo = useCallback((artId) => {
+    setDeleteArtigoId(artId)
+  }, [])
 
   return (
     <div className="bg-white rounded-xl border border-border overflow-hidden mb-3">
@@ -96,57 +183,14 @@ function CapituloEditor({ capitulo, index, total, onUpdate, onRemove, onMoveUp, 
               </thead>
               <tbody className="divide-y divide-border/50">
                 {(capitulo.artigos || []).map((art, ai) => (
-                  <tr key={art.id} className="hover:bg-bg-secondary/30 group">
-                    <td className="px-4 py-1.5 text-xs text-gray-400 font-mono">{String(ai + 1).padStart(2, '0')}</td>
-                    <td className="px-4 py-1.5">
-                      <input
-                        type="text"
-                        value={art.descricao}
-                        onChange={e => onUpdateArtigo(capId, art.id, { descricao: e.target.value })}
-                        className="w-full bg-transparent border-0 text-sm text-gray-800 focus:outline-none focus:bg-white focus:border focus:border-border rounded px-1 py-0.5 min-w-[200px]"
-                      />
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <select
-                        value={art.unidade}
-                        onChange={e => onUpdateArtigo(capId, art.id, { unidade: e.target.value })}
-                        className="w-full bg-transparent border-0 text-sm text-gray-600 text-center focus:outline-none focus:bg-white focus:border focus:border-border rounded px-1 py-0.5"
-                      >
-                        {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        type="number"
-                        min="0" step="0.01"
-                        value={art.quantidade}
-                        onChange={e => onUpdateArtigo(capId, art.id, { quantidade: e.target.value })}
-                        className="w-full bg-transparent border-0 text-sm text-right text-gray-800 focus:outline-none focus:bg-white focus:border focus:border-border rounded px-1 py-0.5"
-                        inputMode="decimal"
-                      />
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        type="number"
-                        min="0" step="0.01"
-                        value={art.preco_unitario}
-                        onChange={e => onUpdateArtigo(capId, art.id, { preco_unitario: e.target.value })}
-                        className="w-full bg-transparent border-0 text-sm text-right text-gray-800 focus:outline-none focus:bg-white focus:border focus:border-border rounded px-1 py-0.5"
-                        inputMode="decimal"
-                      />
-                    </td>
-                    <td className="px-4 py-1.5 text-right text-sm font-medium text-gray-900">
-                      {formatarMoeda((parseFloat(art.quantidade) || 0) * (parseFloat(art.preco_unitario) || 0))}
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <button
-                        onClick={() => setDeleteArtigoId(art.id)}
-                        className="p-1.5 rounded text-gray-200 hover:text-danger hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </td>
-                  </tr>
+                  <ArtigoRow
+                    key={art.id}
+                    art={art}
+                    ai={ai}
+                    capId={capId}
+                    onUpdate={onUpdateArtigo}
+                    onRemove={handleRemoveArtigo}
+                  />
                 ))}
               </tbody>
               <tfoot>

@@ -142,7 +142,6 @@ export function gerarPDF(orcamento, capitulos, empresa) {
   // ── Totals ────────────────────────────────────────────────────────────
   const totaisRows = [
     ['Subtotal', formatarMoeda(totais.subtotal)],
-    orcamento.pct_imprevistos > 0 ? [`Imprevistos (${orcamento.pct_imprevistos}%)`, formatarMoeda(totais.imprevistos)] : null,
     orcamento.mostrar_margem && orcamento.pct_margem > 0 ? [`Margem (${orcamento.pct_margem}%)`, formatarMoeda(totais.margem)] : null,
     ['Base tributável', formatarMoeda(totais.baseTributavel)],
     orcamento.tipo_iva === 'inversao'

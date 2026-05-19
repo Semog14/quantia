@@ -4,6 +4,7 @@ import { useAuthInit } from './hooks/useAuth'
 import { useAuthStore } from './lib/store'
 import { PageLoader } from './components/ui/Spinner'
 import Login from './pages/Login'
+import Home from './pages/Home'
 import Dashboard from './pages/Dashboard'
 import OrcamentoEditor from './pages/OrcamentoEditor'
 import Clientes from './pages/Clientes'
@@ -32,7 +33,7 @@ function AppRoutes() {
         <AuthRoute><Login /></AuthRoute>
       } />
       <Route path="/" element={
-        <ProtectedRoute><Dashboard /></ProtectedRoute>
+        <ProtectedRoute><Home /></ProtectedRoute>
       } />
       <Route path="/orcamentos" element={
         <ProtectedRoute><Dashboard /></ProtectedRoute>

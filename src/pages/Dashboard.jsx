@@ -1,43 +1,24 @@
 import React, { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Copy, Trash2, Edit3, TrendingUp, Clock, CheckCircle, Search, Filter } from 'lucide-react'
+import { Plus, FileText, Copy, Trash2, Edit3, Search } from 'lucide-react'
 import AppLayout from '../components/layout/AppLayout'
 import { EstadoBadge } from '../components/ui/Badge'
 import { ConfirmModal } from '../components/ui/Modal'
 import { useOrcamentos } from '../hooks/useOrcamento'
-import { formatarMoeda } from '../lib/validacoes'
+import { getEmpresaId } from '../lib/auth'
+import { formatarMoeda, gerarNumeroOrcamento } from '../lib/validacoes'
 import { supabase } from '../lib/supabase'
-import { useAuthStore } from '../lib/store'
-import { gerarNumeroOrcamento } from '../lib/validacoes'
 
-const ESTADOS = ['', 'rascunho', 'enviado', 'aprovado', 'recusado', 'expirado']
+const ESTADOS = ['rascunho', 'enviado', 'aprovado', 'recusado', 'expirado']
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { empresa } = useAuthStore()
   const { orcamentos, loading, refetch } = useOrcamentos()
   const [pesquisa, setPesquisa] = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroMes, setFiltroMes] = useState('')
   const [deleteId, setDeleteId] = useState(null)
 
-  const mesAtual = new Date().toISOString().slice(0, 7)
-
-  // Dashboard stats
-  const stats = useMemo(() => {
-    const doMes = orcamentos.filter(o => o.created_at?.slice(0, 7) === mesAtual)
-    const aprovados = orcamentos.filter(o => o.estado === 'aprovado')
-    const pendentes = orcamentos.filter(o => o.estado === 'enviado')
-    return {
-      totalMes: doMes.length,
-      valorMes: doMes.reduce((a, o) => a + (o.total_com_iva || 0), 0),
-      aprovadosCount: aprovados.length,
-      aprovadosValor: aprovados.reduce((a, o) => a + (o.total_com_iva || 0), 0),
-      pendentesCount: pendentes.length,
-    }
-  }, [orcamentos, mesAtual])
-
-  // Filtered list
   const filtrados = useMemo(() => {
     return orcamentos.filter(o => {
       if (filtroEstado && o.estado !== filtroEstado) return false
@@ -52,14 +33,29 @@ export default function Dashboard() {
     })
   }, [orcamentos, filtroEstado, filtroMes, pesquisa])
 
+  const mesesDisponiveis = useMemo(() => {
+    return [...new Set(orcamentos.map(o => o.data_emissao?.slice(0, 7)).filter(Boolean))].sort().reverse()
+  }, [orcamentos])
+
   const handleDuplicar = async (orc) => {
-    if (!empresa) return
+    const empresaId = await getEmpresaId()
+    if (!empresaId) return
     const ano = new Date().getFullYear()
-    const { data: count } = await supabase.from('orcamentos').select('id', { count: 'exact' }).eq('empresa_id', empresa.id)
-    const seq = (count?.length || 0) + 1
+
+    const { data: ultimos } = await supabase
+      .from('orcamentos').select('numero')
+      .eq('empresa_id', empresaId)
+      .like('numero', `ORC-${ano}-%`)
+      .order('numero', { ascending: false }).limit(1)
+    let seq = 1
+    if (ultimos?.length) {
+      const parts = ultimos[0].numero.split('-')
+      const last = parseInt(parts[parts.length - 1], 10)
+      if (!isNaN(last)) seq = last + 1
+    }
 
     const { data: novoOrc } = await supabase.from('orcamentos').insert({
-      empresa_id: empresa.id,
+      empresa_id: empresaId,
       numero: gerarNumeroOrcamento(seq, ano),
       descricao: orc.descricao + ' (cópia)',
       cliente_id: orc.cliente_id,
@@ -76,11 +72,12 @@ export default function Dashboard() {
     }).select().single()
 
     if (novoOrc) {
-      // Copy chapters and articles
-      const { data: caps } = await supabase.from('capitulos').select('*, artigos_orcamento(*)').eq('orcamento_id', orc.id).order('ordem')
+      const { data: caps } = await supabase
+        .from('capitulos').select('*, artigos_orcamento(*)')
+        .eq('orcamento_id', orc.id).order('ordem')
       for (const cap of caps || []) {
         const { data: novoCap } = await supabase.from('capitulos').insert({
-          orcamento_id: novoOrc.id, nome: cap.nome, ordem: cap.ordem
+          orcamento_id: novoOrc.id, nome: cap.nome, ordem: cap.ordem,
         }).select().single()
         for (const art of cap.artigos_orcamento || []) {
           await supabase.from('artigos_orcamento').insert({
@@ -102,20 +99,13 @@ export default function Dashboard() {
     refetch()
   }
 
-  const mesesDisponiveis = useMemo(() => {
-    const meses = [...new Set(orcamentos.map(o => o.data_emissao?.slice(0, 7)).filter(Boolean))].sort().reverse()
-    return meses
-  }, [orcamentos])
-
   return (
-    <AppLayout title="Início">
+    <AppLayout title="Orçamentos">
       <div className="p-4 md:p-6 max-w-7xl mx-auto">
+
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900">Painel</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Bem-vindo ao Quantia</p>
-          </div>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Orçamentos</h1>
           <button
             onClick={() => navigate('/orcamentos/novo')}
             className="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-dark transition-colors flex items-center gap-2 text-sm"
@@ -124,14 +114,6 @@ export default function Dashboard() {
             <span className="hidden sm:inline">Novo Orçamento</span>
             <span className="sm:hidden">Novo</span>
           </button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <StatCard icon={<FileText size={20} />} label="Orçamentos este mês" value={stats.totalMes} color="blue" />
-          <StatCard icon={<TrendingUp size={20} />} label="Valor proposto" value={formatarMoeda(stats.valorMes)} color="orange" />
-          <StatCard icon={<CheckCircle size={20} />} label="Aprovados" value={`${stats.aprovadosCount} · ${formatarMoeda(stats.aprovadosValor)}`} color="green" small />
-          <StatCard icon={<Clock size={20} />} label="Pendentes" value={stats.pendentesCount} color="yellow" />
         </div>
 
         {/* Filters */}
@@ -153,7 +135,7 @@ export default function Dashboard() {
               className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary bg-white"
             >
               <option value="">Todos os estados</option>
-              {ESTADOS.slice(1).map(e => (
+              {ESTADOS.map(e => (
                 <option key={e} value={e}>{e.charAt(0).toUpperCase() + e.slice(1)}</option>
               ))}
             </select>
@@ -266,24 +248,6 @@ export default function Dashboard() {
         danger
       />
     </AppLayout>
-  )
-}
-
-function StatCard({ icon, label, value, color, small }) {
-  const colors = {
-    blue: 'bg-blue-50 text-blue-600',
-    orange: 'bg-orange-50 text-primary',
-    green: 'bg-green-50 text-success',
-    yellow: 'bg-yellow-50 text-yellow-700',
-  }
-  return (
-    <div className="bg-white rounded-xl border border-border p-4">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${colors[color]}`}>
-        {icon}
-      </div>
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className={`font-bold text-gray-900 ${small ? 'text-sm' : 'text-lg'}`}>{value}</p>
-    </div>
   )
 }
 
